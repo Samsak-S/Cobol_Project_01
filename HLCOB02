@@ -1,0 +1,283 @@
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. HLCOB02.
+       ENVIRONMENT DIVISION.
+       INPUT-OUTPUT SECTION.
+       FILE-CONTROL.
+           SELECT TO001-PS ASSIGN TO OUTREP
+           ORGANIZATION IS SEQUENTIAL
+           ACCESS IS SEQUENTIAL
+           FILE STATUS IS WS-FST-TO001.
+       DATA DIVISION.
+       FILE SECTION.
+       FD TO001-PS.
+       01 TO001-PS-REC.
+           05 TO001-APPLICANT-ID           PIC X(10).
+           05 FILLER                       PIC X(3).
+           05 TO001-NAME                   PIC X(32).
+           05 FILLER                       PIC X.
+           05 TO001-CURRENT-BAL-AMT        PIC 9(7).9(2).
+           05 FILLER                       PIC X(6).
+           05 TO001-AMT-PAID               PIC 9(7).9(2).
+           05 FILLER                       PIC X(8).
+       WORKING-STORAGE SECTION.
+       01 WS-VARS.
+           05 WS-FST-TO001                 PIC 9(2).
+               88 WS-CO-SUCC               VALUE 00.
+               88 WS-CO-EOF                VALUE 10.
+           05 WS-ERR-MSG.
+               10 WS-ERR-MSG-LEN       PIC S9(4) USAGE COMP VALUE 800.
+               10 WS-ERR-MSG-TEXT      PIC X(80) OCCURS 10 TIMES.
+           05 WS-ERR-LRECL             PIC S9(9) USAGE COMP VALUE 80.
+           05 WS-GRP-TIME.
+               10 WS-HOURS             PIC 9(2).
+               10 WS-MINS              PIC 9(2).
+               10 WS-SECS              PIC 9(2).
+           05 WS-PAGE-COUNTER PIC 9(1).
+           05 WS-ROW-COUNTER  PIC 9(2).
+       01 WS-LAYOUT-VARS.
+           05 WS-PAGE-HEADER1.
+               10 FILLER   PIC X(26).
+               10 WS-TITLE PIC X(21) VALUE 'PAYMENT DETAIL REPORT'.
+               10 FILLER   PIC X(27).
+           05 WS-PAGE-HEADER2.
+               10 WS-ITEM1 PIC X(5).
+               10 WS-PG-DATE  PIC X(8).
+               10 FILLER   PIC X(45).
+               10 WS-ITEM2 PIC X(5) VALUE 'PAGE:'.
+               10 WS-PG-PAGE  PIC X(1).
+               10 FILLER   PIC X(08).
+           05 WS-PAGE-HEADER3.
+               10 WS-ITEM3 PIC X(5).
+               10 WS-PG-TIME  PIC X(8).
+               10 FILLER   PIC X(45).
+               10 WS-ITEM4 PIC X(10) VALUE 'REPORT ID:'.
+               10 WS-PG-REP   PIC X(4) VALUE '1004'.
+           05 WS-MAIN-HEADER.
+               10 WS-COL1  PIC X(12)  VALUE 'APPLICANT ID'.
+               10 FILLER   PIC X.
+               10 WS-COL2  PIC X(4)   VALUE 'NAME'.
+               10 FILLER   PIC X(29).
+               10 WS-COL3  PIC X(15)  VALUE 'CURRENT BAL AMT'.
+               10 FILLER   PIC X.
+               10 WS-COL4  PIC X(8)   VALUE 'AMT PAID'.
+               10 FILLER   PIC X(2).
+           05 WS-PAGE-TRAILER.
+               10 HYPHEN1  PIC X(30)  VALUE ALL '-'.
+               10 WS-PG-TRAIL PIC X(11) VALUE 'END OF PAGE'.
+               10 HYPHEN2  PIC X(31)  VALUE ALL '-'.
+           05 WS-REPORT-TRAILER.
+               10 STAR1    PIC X(29)  VALUE ALL '*'.
+               10 WS-RP-TRAIL PIC X(13) VALUE 'END OF REPORT'.
+               10 STAR2    PIC X(30)  VALUE ALL '*'.
+           05 WS-MAIN-LINE.
+               10 WS-COL5  PIC X(12)  VALUE '------------'.
+               10 FILLER   PIC X.
+               10 WS-COL6  PIC X(4)   VALUE '----'.
+               10 FILLER   PIC X(29).
+               10 WS-COL7  PIC X(15)  VALUE '---------------'.
+               10 FILLER   PIC X.
+               10 WS-COL8  PIC X(8)   VALUE '--------'.
+               10 FILLER   PIC X(2).
+           EXEC SQL
+               INCLUDE SQLCA
+           END-EXEC.
+           EXEC SQL
+               INCLUDE DCLAPP
+           END-EXEC.
+           EXEC SQL
+               INCLUDE DCLPAY
+           END-EXEC.
+           EXEC SQL
+               DECLARE HLCURS CURSOR
+               FOR SELECT P.APPLICANT_ID, P.CURRENT_BALANCE_AMOUNT,
+                          P.AMOUNT_PAID, A.APPLICANT_NAME
+                   FROM PAYMENT_DB P INNER JOIN APPLICANT_DB A
+                   ON P.APPLICANT_ID = A.APPLICANT_ID INNER JOIN
+                      LOAN_DB L ON P.APPLICANT_ID = L.APPLICANT_ID
+                   WHERE L.LOAN_TYPE = 'HOUSING' AND
+                         P.CURRENT_BALANCE_AMOUNT < 1000
+           END-EXEC.
+       PROCEDURE DIVISION.
+       0000-MAIN-PARA.
+           PERFORM 1000-INIT-PARA
+              THRU 1000-INIT-PARA-EXIT
+           PERFORM 3000-PROC-PARA
+              THRU 3000-PROC-PARA-EXIT
+           PERFORM 9000-TERM-PARA
+              THRU 9000-TERM-PARA-EXIT
+           .
+       0000-MAIN-PARA-EXIT.
+           EXIT.
+       1000-INIT-PARA.
+           INITIALIZE WS-VARS.
+       1000-INIT-PARA-EXIT.
+           EXIT.
+       3000-PROC-PARA.
+           PERFORM 3100-OPEN-PARA
+              THRU 3100-OPEN-PARA-EXIT
+           PERFORM 3200-CHECK-PARA
+              THRU 3200-CHECK-PARA-EXIT
+             UNTIL SQLCODE = 100
+           PERFORM 3300-CLOSE-PARA
+              THRU 3300-CLOSE-PARA-EXIT
+           .
+       3000-PROC-PARA-EXIT.
+           EXIT.
+       3100-OPEN-PARA.
+           OPEN OUTPUT TO001-PS
+           EVALUATE TRUE
+           WHEN WS-CO-SUCC
+               DISPLAY 'SUCCESSFULLY OPENED'
+           WHEN OTHER
+               DISPLAY 'FILE OPEN ERROR' WS-FST-TO001
+           END-EVALUATE
+           EXEC SQL
+               OPEN HLCURS
+           END-EXEC
+           .
+       3100-OPEN-PARA-EXIT.
+           EXIT.
+       3200-CHECK-PARA.
+           EXEC SQL
+             FETCH HLCURS
+             INTO
+                 :HVP-APPLICANT-ID
+                ,:HVP-CURRENT-BALANCE-AMOUNT
+                ,:HVP-AMOUNT-PAID
+                ,:HVA-APPLICANT-NAME
+           END-EXEC
+           EVALUATE TRUE
+           WHEN SQLCODE = 00
+               DISPLAY 'FETCHED SUCCESSFULLY'
+           WHEN SQLCODE = 100
+               DISPLAY 'END OF FILE REACHED'
+           WHEN OTHER
+               CALL 'DSNTIAR' USING SQLCA WS-ERR-MSG WS-ERR-LRECL
+               DISPLAY WS-ERR-MSG
+           END-EVALUATE
+           EVALUATE TRUE
+           WHEN SQLCODE = 0
+      *                    PAYMENT DETAILS REPORT               *
+               IF WS-PAGE-COUNTER = 0 THEN
+                   MOVE WS-PAGE-HEADER1 TO TO001-PS-REC
+                   WRITE TO001-PS-REC
+                   ADD 1 TO WS-PAGE-COUNTER
+                   ADD 1 TO WS-ROW-COUNTER
+               END-IF
+      * DATE:20240405                             PAGE NO:1     *
+               IF WS-ROW-COUNTER = 1 AND WS-PAGE-COUNTER = 1 THEN
+                   MOVE 'DATE:' TO WS-ITEM1
+                   MOVE FUNCTION CURRENT-DATE TO WS-PG-DATE
+                   MOVE WS-PAGE-COUNTER TO WS-PG-PAGE
+                   MOVE WS-PAGE-HEADER2 TO TO001-PS-REC
+                   WRITE TO001-PS-REC
+                   ADD 1 TO WS-ROW-COUNTER
+               END-IF
+      * TIME:09:49:42                             REPORT ID:1004*
+               IF WS-ROW-COUNTER = 2 AND WS-PAGE-COUNTER = 1 THEN
+                   MOVE 'TIME:' TO WS-ITEM3
+                   MOVE FUNCTION CURRENT-DATE(9:6) TO WS-GRP-TIME
+                   STRING WS-HOURS ':' WS-MINS ':' WS-SECS
+                          DELIMITED BY SIZE
+                          INTO WS-PG-TIME
+                   END-STRING
+                   MOVE WS-PAGE-HEADER3 TO TO001-PS-REC
+                   ADD 1 TO WS-ROW-COUNTER
+                   WRITE TO001-PS-REC
+               END-IF
+      * APPLICANT ID NAME               CURRENT BAL AMT AMT PAID*
+               IF WS-ROW-COUNTER = 3 AND WS-PAGE-COUNTER = 1 THEN
+                   MOVE WS-MAIN-HEADER TO TO001-PS-REC
+                   ADD 1 TO WS-ROW-COUNTER
+                   WRITE TO001-PS-REC
+               END-IF
+      * ------------ ----               --------------- --------*
+               IF WS-ROW-COUNTER = 4 AND WS-PAGE-COUNTER = 1 THEN
+                   MOVE WS-MAIN-LINE TO TO001-PS-REC
+                   ADD 1 TO WS-ROW-COUNTER
+                   WRITE TO001-PS-REC
+               END-IF
+      * -------------------MAIN PAGE RECORDS--------------------*
+               IF WS-ROW-COUNTER > 4 AND WS-ROW-COUNTER < 9 AND
+                   WS-PAGE-COUNTER = 1   THEN
+                   MOVE HVP-APPLICANT-ID TO TO001-APPLICANT-ID
+                   MOVE HVA-APPLICANT-NAME-TEXT TO TO001-NAME
+                   MOVE HVP-AMOUNT-PAID TO TO001-AMT-PAID
+                   MOVE HVP-CURRENT-BALANCE-AMOUNT TO
+                        TO001-CURRENT-BAL-AMT
+                   WRITE TO001-PS-REC
+                   ADD 1 TO WS-ROW-COUNTER
+               END-IF
+      *                                           PAGE NO:2     *
+               IF WS-ROW-COUNTER = 0 AND WS-PAGE-COUNTER > 1 THEN
+                   MOVE SPACES TO WS-PG-DATE
+                   MOVE SPACES TO WS-PG-ITEM1	
+                   MOVE WS-PAGE-COUNTER TO WS-PG-PAGE
+                   MOVE WS-PAGE-HEADER2 TO TO001-PS-REC
+                   WRITE TO001-PS-REC
+                   ADD 1 TO WS-ROW-COUNTER
+               END-IF
+      *                                           REPORT ID:1004*
+               IF WS-ROW-COUNTER = 1 AND WS-PAGE-COUNTER > 1 THEN
+                   MOVE SPACES TO WS-PG-TIME
+                   MOVE SPACES TO WS-PG-ITEM3	                   
+                   MOVE WS-PAGE-HEADER3 TO TO001-PS-REC
+                   ADD 1 TO WS-ROW-COUNTER
+                   WRITE TO001-PS-REC
+               END-IF
+      * APPLICANT ID NAME               CURRENT BAL AMT AMT PAID*
+               IF WS-ROW-COUNTER = 2 AND WS-PAGE-COUNTER > 1 THEN
+                   MOVE WS-MAIN-HEADER TO TO001-PS-REC
+                   ADD 1 TO WS-ROW-COUNTER
+                   WRITE TO001-PS-REC
+               END-IF
+      * ------------ ----               --------------- --------*
+               IF WS-ROW-COUNTER = 3 AND WS-PAGE-COUNTER > 1 THEN
+                   MOVE WS-MAIN-LINE TO TO001-PS-REC
+                   ADD 1 TO WS-ROW-COUNTER
+                   WRITE TO001-PS-REC
+               END-IF
+      * -------------------MAIN PAGE RECORDS--------------------*
+               IF WS-ROW-COUNTER > 3 AND WS-ROW-COUNTER < 9 AND
+                   WS-PAGE-COUNTER > 1 THEN
+                   MOVE HVP-APPLICANT-ID TO TO001-APPLICANT-ID
+                   MOVE HVA-APPLICANT-NAME-TEXT TO TO001-NAME
+                   MOVE HVP-AMOUNT-PAID TO TO001-AMT-PAID
+                   MOVE HVP-CURRENT-BALANCE-AMOUNT TO
+                        TO001-CURRENT-BAL-AMT
+                   WRITE TO001-PS-REC
+                   ADD 1 TO WS-ROW-COUNTER
+               END-IF
+      * --------------------END OF PAGE-------------------------*
+               IF WS-ROW-COUNTER = 9 THEN
+                   MOVE WS-PAGE-TRAILER TO TO001-PS-REC
+                   WRITE TO001-PS-REC
+                   MOVE 0 TO WS-ROW-COUNTER
+                   ADD 1 TO WS-PAGE-COUNTER
+               END-IF
+           WHEN OTHER
+      * --------------------END OF PAGE-------------------------*
+               IF WS-ROW-COUNTER > 0 AND WS-ROW-COUNTER < 9 THEN
+                   MOVE WS-PAGE-TRAILER TO TO001-PS-REC
+                   WRITE TO001-PS-REC
+               END-IF
+      * ********************END OF REPORT************************
+               MOVE WS-REPORT-TRAILER TO TO001-PS-REC
+               WRITE TO001-PS-REC
+           END-EVALUATE
+           .
+       3200-CHECK-PARA-EXIT.
+           EXIT.
+       3300-CLOSE-PARA.
+           CLOSE TO001-PS
+           EXEC SQL
+               CLOSE HLCURS
+           END-EXEC
+           .
+       3300-CLOSE-PARA-EXIT.
+           EXIT.
+       9000-TERM-PARA.
+           STOP RUN.
+       9000-TERM-PARA-EXIT.
+           EXIT.
+

@@ -1,0 +1,19 @@
+//TECN138R JOB ,,NOTIFY=&SYSUID,CLASS=A,MSGLEVEL=(1,1),MSGCLASS=H,      00010019
+//         LINES=(1,CANCEL),PRTY=15                                     00020019
+//JOBLIB  DD DISP=SHR,                                                  00030019
+//            DSN=DSN910.SDSNLOAD                                       00040019
+//         DD DISP=SHR,                                                 00050019
+//            DSN=CEE.SCEERUN                                           00060019
+//PH02CS04 EXEC PGM=IKJEFT01,DYNAMNBR=20,COND=(4,LT)                    00070019
+//SYSTSPRT DD SYSOUT=*                                                  00080019
+//SYSPRINT DD SYSOUT=*                                                  00090019
+//SYSOUT   DD SYSOUT=*                                                  00100019
+//OUTSORT  DD DSN=TECN138.PROJECT.OUTPUT,DISP=SHR                       00110019
+//OUTCSV   DD DSN=TECN138.PROJECT.CSV,DISP=SHR                          00120019
+//SYSIN    DD DUMMY                                                     00130019
+//SYSTSIN  DD *                                                         00140019
+  DSN SYSTEM(DB9G)                                                      00150019
+  RUN PROGRAM(HLCOB01) PLAN(TECN138P) LIB('TECN138.DB2.LOADLIB')        00160019
+  END                                                                   00170019
+/*                                                                      00180019
+

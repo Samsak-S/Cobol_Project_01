@@ -1,0 +1,268 @@
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. HLCOB01.
+       ENVIRONMENT DIVISION.
+       INPUT-OUTPUT SECTION.
+       FILE-CONTROL.
+           SELECT TO001-OUTPUT ASSIGN TO OUTSORT
+           ORGANIZATION IS SEQUENTIAL
+           ACCESS IS SEQUENTIAL
+           FILE STATUS IS WS-FST-TO001.
+           SELECT TO002-CSV ASSIGN TO OUTCSV
+           ORGANIZATION IS SEQUENTIAL
+           ACCESS IS SEQUENTIAL
+           FILE STATUS IS WS-FST-TO002.
+       DATA DIVISION.
+       FILE SECTION.
+       FD TO001-OUTPUT.
+       01 TO001-OUTPUT-REC.
+           05 TO001-REPORT-DATE     PIC X(10).
+           05 FILLER                PIC X(1).
+           05 TO001-APPLICANT-ID    PIC X(10).
+           05 FILLER                PIC X(1).
+           05 TO001-LOAN-ID         PIC X(2).
+           05 FILLER                PIC X(1).
+           05 TO001-LOAN-TYPE       PIC X(10).
+           05 FILLER                PIC X(1).
+           05 TO001-DUE-DATE        PIC X(10).
+           05 FILLER                PIC X(1).
+           05 TO001-MON-REP-AMT     PIC 9(7).9(2).
+           05 FILLER                PIC X(23).
+       FD TO002-CSV.
+       01 TO002-CSV-REC             PIC X(80).
+       WORKING-STORAGE SECTION.
+       01 WS-VARS.
+           05 WS-FST-TO001     PIC 9(2).
+              88 WS-FST-SUC1   VALUE 00.
+              88 WS-FST-EOF1   VALUE 10.
+           05 WS-FST-TO002     PIC 9(2).
+              88 WS-FST-SUC2   VALUE 00.
+              88 WS-FST-EOF2   VALUE 00.
+           05 WS-DAYS          PIC 9(9).
+           05 WS-COUNTER       PIC 9(3).
+           05 WS-DUE-DATE      PIC 9(8).
+           05 WS-PAID-DATE     PIC 9(8).
+           05 WS-DUE-GDATE.
+               10 WS-DUE-YEAR      PIC 9(4).
+               10 WS-DUE-MONTH     PIC 9(2).
+               10 WS-DUE-DAY       PIC 9(2).
+           05 WS-PAID-GDATE.
+               10 WS-PAID-YEAR      PIC 9(4).
+               10 WS-PAID-MONTH     PIC 9(2).
+               10 WS-PAID-DAY       PIC 9(2).
+           05 WS-CURR-DATE.
+               10 WS-CURR-YEAR      PIC 9(4).
+               10 WS-CURR-MONTH     PIC 9(2).
+               10 WS-CURR-DAY       PIC 9(2).
+      *******************ERROR HANDLING DECLARATION********************
+           05 WS-ERR-MSG.
+               10 WS-ERR-MSG-LEN       PIC S9(4) USAGE COMP VALUE 800.
+               10 WS-ERR-MSG-TEXT      PIC X(80) OCCURS 10 TIMES.
+           05 WS-ERR-LRECL             PIC S9(9) USAGE COMP VALUE 80.
+           EXEC SQL
+               INCLUDE SQLCA
+           END-EXEC.
+           EXEC SQL
+               INCLUDE DCLLOAN
+           END-EXEC.
+           EXEC SQL
+           INCLUDE DCLPAY
+           END-EXEC.
+           EXEC SQL
+      *********************CURSOR DECLARATION************************
+           DECLARE HLCURS CURSOR
+           FOR SELECT L.APPLICANT_ID,L.LOAN_ID,L.LOAN_TYPE,
+                L.NEXT_REPAYMENT_DUE_DATE, L.MONTHLY_REPAYMENT_AMOUNT,
+                P.AMOUNT_PAID_DATE, L.BALANCE_AMOUNT
+           FROM LOAN_DB L,PAYMENT_DB P
+           WHERE L.APPLICANT_ID = P.APPLICANT_ID AND
+                 L.LOAN_ID = P.LOAN_ID AND L.LOAN_TYPE='HOUSING'
+                 AND L.LOAN_INDICATOR='OPEN'
+           END-EXEC.
+       PROCEDURE DIVISION.
+       0000-MAIN-PARA.
+           PERFORM 1000-INIT-PARA
+           THRU 1000-INIT-PARA-EXIT
+           PERFORM 3000-PROC-PARA
+           THRU 3000-PROC-PARA-EXIT
+           PERFORM 9000-TERM-PARA
+           THRU 9000-TERM-PARA-EXIT
+           .
+       0000-MAIN-PARA-EXIT.
+           EXIT.
+       1000-INIT-PARA.
+           INITIALIZE WS-VARS.
+       1000-INIT-PARA-EXIT.
+           EXIT.
+       3000-PROC-PARA.
+           PERFORM 3100-OPEN-PARA
+           THRU 3100-OPEN-PARA-EXIT
+           PERFORM 3200-FETCH-PARA
+           THRU 3200-FETCH-PARA-EXIT
+           UNTIL SQLCODE = 100
+           PERFORM 3300-CLOSE-PARA
+           THRU 3300-CLOSE-PARA-EXIT
+           .
+       3000-PROC-PARA-EXIT.
+           EXIT.
+       3100-OPEN-PARA.
+           OPEN OUTPUT TO001-OUTPUT
+           EVALUATE TRUE
+           WHEN WS-FST-SUC1
+             DISPLAY 'SUCCESSFULLY OPENED'
+           WHEN OTHER
+             DISPLAY 'FILE OPEN ERROR' WS-FST-TO001
+           END-EVALUATE
+           OPEN OUTPUT TO002-CSV
+           EVALUATE TRUE
+           WHEN WS-FST-SUC2
+             DISPLAY 'SUCCESSFULLY OPENED'
+           WHEN OTHER
+             DISPLAY 'FILE OPEN ERROR' WS-FST-TO002
+           END-EVALUATE
+           EXEC SQL
+               OPEN HLCURS
+           END-EXEC
+           EVALUATE TRUE
+           WHEN SQLCODE = 0
+             DISPLAY 'SUCCESSFULLY OPENED'
+           WHEN OTHER
+               CALL 'DSNTIAR' USING SQLCA WS-ERR-MSG WS-ERR-LRECL
+               DISPLAY WS-ERR-MSG
+           END-EVALUATE
+           .
+       3100-OPEN-PARA-EXIT.
+           EXIT.
+       3200-FETCH-PARA.
+           DISPLAY 'FETCH PARA OPENED'
+           MOVE SPACES TO TO001-OUTPUT-REC
+           EXEC SQL
+             FETCH HLCURS
+             INTO
+                 :HV-APPLICANT-ID
+                ,:HV-LOAN-ID
+                ,:HV-LOAN-TYPE
+                ,:HV-NEXT-REPAYMENT-DUE-DATE
+                ,:HV-MONTHLY-REPAYMENT-AMOUNT
+                ,:HVP-AMOUNT-PAID-DATE
+                ,:HV-BALANCE-AMOUNT
+           END-EXEC
+           IF SQLCODE = 0
+               DISPLAY 'DATA FETCHED'
+           ELSE
+               CALL 'DSNTIAR' USING SQLCA WS-ERR-MSG WS-ERR-LRECL
+               DISPLAY WS-ERR-MSG ' ' SQLCODE
+           END-IF
+      ******************MOVING VALUES INTO LAYOUT********************
+           MOVE FUNCTION CURRENT-DATE TO WS-CURR-DATE
+           STRING WS-CURR-YEAR '-' WS-CURR-MONTH '-' WS-CURR-DAY
+                  DELIMITED BY SIZE
+                  INTO TO001-REPORT-DATE
+           END-STRING
+           DISPLAY TO001-REPORT-DATE
+           MOVE HV-APPLICANT-ID TO TO001-APPLICANT-ID
+           MOVE HV-LOAN-ID TO TO001-LOAN-ID
+           DISPLAY TO001-LOAN-ID
+           MOVE HV-LOAN-TYPE TO TO001-LOAN-TYPE
+           DISPLAY TO001-LOAN-TYPE
+           MOVE HV-NEXT-REPAYMENT-DUE-DATE TO
+                TO001-DUE-DATE
+           DISPLAY TO001-DUE-DATE
+           MOVE HV-MONTHLY-REPAYMENT-AMOUNT TO
+                TO001-MON-REP-AMT
+           DISPLAY TO001-MON-REP-AMT
+           UNSTRING HV-NEXT-REPAYMENT-DUE-DATE DELIMITED BY
+             '-' INTO WS-DUE-YEAR, WS-DUE-MONTH, WS-DUE-DAY
+           MOVE WS-DUE-GDATE TO WS-DUE-DATE
+           DISPLAY 'DUE DATE: ' WS-DUE-DATE
+           UNSTRING HVP-AMOUNT-PAID-DATE DELIMITED BY '-'
+              INTO WS-PAID-YEAR, WS-PAID-MONTH, WS-PAID-DAY
+           MOVE WS-PAID-GDATE TO WS-PAID-DATE
+           DISPLAY 'PAID DATE: ' WS-PAID-DATE
+           COMPUTE WS-DAYS = FUNCTION INTEGER-OF-DATE
+                             (WS-DUE-DATE)
+                                       -
+                             FUNCTION INTEGER-OF-DATE
+                             (WS-PAID-DATE)
+           DISPLAY WS-DAYS
+           ADD 1 TO WS-COUNTER
+           EVALUATE TRUE
+           WHEN WS-DAYS > 30 AND SQLCODE = 0
+               PERFORM 3210-UPDATE-PARA THRU
+               3210-UPDATE-PARA-EXIT
+               PERFORM 3220-WRITECSV-PARA THRU
+               3220-WRITECSV-PARA-EXIT
+      **************WRITING TO THE SORT FILE*************************
+               WRITE TO001-OUTPUT-REC
+               DISPLAY 'RECORD' WS-COUNTER 'WRITTEN'
+           WHEN OTHER
+               DISPLAY 'RECORD' WS-COUNTER 'SKIPPED'
+           END-EVALUATE
+           .
+       3200-FETCH-PARA-EXIT.
+           EXIT.
+       3210-UPDATE-PARA.
+      ************REDUCING BALANCE AMOUNT IF DAYS > 36****************
+           IF WS-DAYS > 36
+               IF HV-BALANCE-AMOUNT > 499 THEN
+                   COMPUTE HV-BALANCE-AMOUNT = HV-BALANCE-AMOUNT - 500
+               END-IF
+               IF HV-BALANCE-AMOUNT < 500 THEN
+                   MOVE 0 TO HV-BALANCE-AMOUNT
+               END-IF
+      ************UPDATING BALANCE_AMOUNT IN LOAN_DB******************
+               EXEC SQL
+                UPDATE LOAN_DB
+                 SET BALANCE_AMOUNT = :HV-BALANCE-AMOUNT
+                 WHERE APPLICANT_ID = :HV-APPLICANT-ID
+               END-EXEC
+               IF SQLCODE = 0
+                   DISPLAY 'LOAN_DB UPDATED'
+               ELSE
+                   CALL 'DSNTIAR' USING SQLCA WS-ERR-MSG WS-ERR-LRECL
+                   DISPLAY WS-ERR-MSG ' ' SQLCODE
+               END-IF
+      *********UPDATING CURRENT_BALANCE_AMOUNT IN PAYMENT_DB********
+               EXEC SQL
+                UPDATE PAYMENT_DB
+                 SET CURRENT_BALANCE_AMOUNT = :HV-BALANCE-AMOUNT
+                 WHERE APPLICANT_ID = :HV-APPLICANT-ID
+               END-EXEC
+               IF SQLCODE = 0
+                   DISPLAY 'PAYMENT_DB UPDATED'
+               ELSE
+                   CALL 'DSNTIAR' USING SQLCA WS-ERR-MSG WS-ERR-LRECL
+                   DISPLAY WS-ERR-MSG ' ' SQLCODE
+               END-IF
+           ELSE
+               DISPLAY 'NOT ELIGIBLE FOR DISCOUNT'
+           END-IF
+           .
+       3210-UPDATE-PARA-EXIT.
+           EXIT.
+       3220-WRITECSV-PARA.
+      *************MOVING AND WRITING TO CSV FILE LAYOUT**************
+           STRING TO001-REPORT-DATE ','
+                  TO001-APPLICANT-ID ','
+                  TO001-LOAN-ID ','
+                  TO001-LOAN-TYPE ','
+                  TO001-DUE-DATE ','
+                  TO001-MON-REP-AMT DELIMITED BY SPACE
+               INTO TO002-CSV-REC
+           END-STRING
+           WRITE TO002-CSV-REC
+           .
+       3220-WRITECSV-PARA-EXIT.
+           EXIT.
+       3300-CLOSE-PARA.
+           CLOSE TO001-OUTPUT
+           EXEC SQL
+           CLOSE HLCURS
+           END-EXEC
+           .
+       3300-CLOSE-PARA-EXIT.
+           EXIT.
+       9000-TERM-PARA.
+           STOP RUN.
+       9000-TERM-PARA-EXIT.
+           EXIT.
+
